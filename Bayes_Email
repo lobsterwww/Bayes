@@ -1,0 +1,365 @@
+import numpy as np
+from functools import reduce
+
+#准备数据：从文本中构建词向量
+def loadDataSet():
+    # 切分的词条
+    postingList = [['my', 'dog', 'has', 'flea', 'problems', 'help', 'please'],
+                   ['maybe', 'not', 'take', 'him', 'to', 'dog', 'park', 'stupid'],
+                   ['my', 'dalmation', 'is', 'so', 'cute', 'I', 'love', 'him'],
+                   ['stop', 'posting', 'stupid', 'worthless', 'garbage'],
+                   ['mr', 'licks', 'ate', 'my', 'steak', 'how', 'to', 'stop', 'him'],
+                   ['quit', 'buying', 'worthless', 'dog', 'food', 'stupid']]
+    # 类别标签向量，1代表侮辱性词汇，0代表不是
+    classVec = [0, 1, 0, 1, 0, 1]
+    # 返回实验样本切分的词条、类别标签向量
+    return postingList, classVec
+
+def createVocabList(dataSet):
+    #无重复提取单祠
+    vocabSet = set([])
+    for document in dataSet:
+        vocabSet = vocabSet |set(document)#创建两个集合的并集
+
+    return list(vocabSet)
+
+#检查单词在第几篇文档（文档为inputSet向量）中出现
+def setOfWords2Vec(vocabList,inputSet):
+    #创建一个元素都为0的向量
+    returnVec = [0]*len(vocabList)
+    for word in inputSet:
+        if word in vocabList:
+            returnVec[vocabList.index(word)] += 1
+    # else: print("the word: %s is not in my Vocabulary!" % word)
+
+    return returnVec
+
+listOPosts,listClasses = loadDataSet()
+myVocabList = createVocabList(listOPosts)
+# print(myVocabList)
+# print(setOfWords2Vec(myVocabList,listOPosts[0]))
+
+#训练算法：词向量计算概率
+#输入：文档矩阵trainMatrix、每类文档类别标签所构成向量trainCategory
+def trainNB0(trainMatrix,trainCategory):
+    numTrainDocs = len(trainMatrix)
+    numWords = len(trainMatrix[0])#无重复单词表有几个单词
+
+    #概率初始化
+    pAbusive=sum(trainCategory)/float(numTrainDocs) #文档里脏话文档的概率
+    p0Num = np.ones(numWords)#正向词汇列
+    p1Num = np.ones(numWords)#脏话词汇列，都初始化为0
+    #降低由概率值为0导致最后乘积为0的影响
+    p0Denom=2.0
+    p1Denom=2.0
+
+    for i in range(numTrainDocs):
+        #计算文档属于侮辱性文档(class=1)的概率P(1)
+        #对于二分类问题可以通过1-P（1）得到P(0)
+        #一旦某个词语在某文档中出现，该词对应的个数就加1
+        #在所有的文档中，文档的总词数也相应+1，
+
+        if trainCategory[i]==1: #对于脏话类词汇统计
+            p1Num += trainMatrix[i] #统计脏话词汇数量，对应位置数量+1（单位就是1）
+            p1Denom += sum(trainMatrix[i]) #总脏话词汇+出现次数
+        else:
+            p0Num += trainMatrix[i]
+            p0Denom += sum(trainMatrix[i])
+
+    p1Vect=p1Num/p1Denom
+    p0Vect=p0Num/p0Denom
+
+    return p0Vect,p1Vect,pAbusive
+
+trainMat=[]
+for postinDoc in listOPosts:
+    trainMat.append(setOfWords2Vec(myVocabList,postinDoc))
+    #统计经过处理的无重复词汇表中在对应第（postinDoc）文档中是否出现，是标记1，
+    #返回len为文档长度的向量组
+# print(trainMat)
+
+p0V,p1V,pAb=trainNB0(trainMat,listClasses)
+# print("0")
+# print(p0V)
+# print("1")
+# print(p1V)
+# print("A")
+# print(pAb)
+# print(myVocabList)
+
+#朴素贝叶斯分类函数/输入向量（要分类的向量，使用函数trainNB0计算得到三个概率
+def classifyNB(vec2Classify,p0Vec,p1Vec,pClass1):
+    p1 = sum(vec2Classify*p1Vec)+np.log(pClass1)
+    p0 = sum(vec2Classify*p0Vec)+np.log(1.0-pClass1)
+    if p1>p0:
+        return 1
+    else:
+        return 0
+#简单的分类测试
+def testingNB():
+    listOposts,listClasses = loadDataSet()
+    myVocabList = createVocabList(listOposts)
+    trainMat=[]
+
+    for postinDoc in listOposts:
+        trainMat.append(setOfWords2Vec(myVocabList,postinDoc))
+    p0V,p1V,pAb = trainNB0(np.array(trainMat),np.array(listClasses))
+    testEntry=['love','my','dalmation']
+
+    thisDoc = np.array(setOfWords2Vec(myVocabList,testEntry))
+    print(testEntry,'classified as:',classifyNB(thisDoc,p0V,p1V,pAb))
+    testEntry=['stupid','garbage']
+    thisDoc = np.array(setOfWords2Vec(myVocabList,testEntry))
+    print(testEntry,'classified as:',classifyNB(thisDoc,p0V,p1V,pAb))
+
+
+
+testingNB()
+
+#词袋模型：遇到每一个单词时，会增加词向量中对应值，而不是将对应数值设为0
+def bagOfWords2VecMN(vocabList,inputSet):
+    returnVec = [0]*len(vocabList)
+    for word in inputSet:
+        if word in vocabList:
+            returnVec[vocabList.index(word)]+=1
+    return returnVec
+
+#应用：进行垃圾邮件的过滤
+
+#切分文本
+
+#test!
+# mySent = 'This book is the best book on python or M.L. I have laid eyes upon.'
+#
+# import re
+# regEx = re.compile('\\W*')
+# listOfTokens = regEx.split(mySent)
+
+#测试：使用朴素贝叶斯进行交叉验证
+def textParse(bigString):
+    import re
+    listOfTokens =re.split(r'\W*',bigString)
+    return[tok.lower() for tok in listOfTokens if len(tok)>2]
+    #返回长度大于2的词，而且全部小写化
+
+
+
+#该函数对贝叶斯垃圾邮件分类进行自动化处理，导入spam与ham下的文本文件，并为他们解析词列表。（*1）
+#分离器所需要的概率计算只利用训练集中的文档来完成
+#python变量trainingSet是一个整数列表，数值范围是0到49；（*2）
+
+
+
+def spamTest():
+    docList=[]
+    classList=[]
+    fullText=[]
+    main_email=[]
+    for i in range(1,26):
+        #（*1）
+        wordList = textParse(open('email/spam/%d.txt'%i).read())
+        main_e=open('email/spam/%d.txt'%i).read()
+        main_email.append(main_e)
+        docList.append(wordList)
+        fullText.extend(wordList)
+        classList.append(1)
+
+        wordList = textParse(open('email/ham/%d.txt'%i).read())
+        docList.append(wordList)
+        main_e= open('email/spam/%d.txt' % i).read()
+        main_email.append(main_e)
+        fullText.extend(wordList)
+        classList.append(0)
+
+
+
+    #构建词汇表
+    vocabList = createVocabList(docList)
+    # print("构建的vocabList：")
+    # print(vocabList)
+    # print("=========================================================")
+
+
+
+    #进行测试集的划分 （*2）
+    trainingSet = list(range(50))
+    testSet=[]
+    for i in range(10): #随机选择10个文件
+        randIndex = int(np.random.uniform(0,len(trainingSet))) #随机构建测试集，获取随机数作为index
+        testSet.append(trainingSet[randIndex])#把index对应的邮件index添加到测试集中
+        del(trainingSet[randIndex])#并且把该index从待挑选名单中删除
+
+
+    trainMat=[]
+    trainClasses =[]
+    for docIndex in trainingSet:
+        #对于每一个训练集里的训练单位进行词向量的构建
+        trainMat.append(setOfWords2Vec(vocabList,docList[docIndex]))
+        trainClasses.append(classList[docIndex]) #安上对应标签！
+    #针对训练集进行训练
+    #
+    # print(trainMat)
+    # print(trainClasses)
+
+    p0V,p1V,pSpam=trainNB0(np.array(trainMat),np.array(trainClasses))
+    # print(p0V)
+
+    errorCount = 0
+
+    for docIndex in testSet:
+        #提取训练名单上对应的邮件信息，查看滴docIndex条元素里对应的单词是否在vocablist词汇表中出现，出现则+1，返回信息向量wordVector
+        # print("train")
+        # print(docList[docIndex])
+        wordVector = setOfWords2Vec(vocabList,docList[docIndex])
+        # print(wordVector)
+
+        if classifyNB(np.array(wordVector),p0V,p1V,pSpam)!=classList[docIndex]:
+            errorCount +=1
+            print(main_email[docIndex])
+            print(classifyNB(np.array(wordVector), p0V, p1V, pSpam))
+            print(classList[docIndex])
+
+
+
+
+    print('the error rate is :',float(errorCount)/len(testSet))
+
+# spamTest()
+
+#寻找最优参数
+
+
+def findthebest_Data_test():
+    docList = []
+    classList = []
+    fullText = []
+    main_email = []
+    for i in range(1, 26):
+        # （*1）
+        wordList = textParse(open('email/spam/%d.txt' % i).read())
+        main_e = open('email/spam/%d.txt' % i).read()
+        main_email.append(main_e)
+        docList.append(wordList)
+        fullText.extend(wordList)
+        classList.append(1)
+
+        wordList = textParse(open('email/ham/%d.txt' % i).read())
+        docList.append(wordList)
+        main_e = open('email/spam/%d.txt' % i).read()
+        main_email.append(main_e)
+        fullText.extend(wordList)
+        classList.append(0)
+
+    # 构建词汇表
+    vocabList = createVocabList(docList)
+    # print("构建的vocabList：")
+    # print(vocabList)
+    # print("=========================================================")
+
+    # 进行测试集的划分 （*2）
+    trainingSet = list(range(50))
+    testSet = []
+    for i in range(10):  # 随机选择10个文件
+        randIndex = int(np.random.uniform(0, len(trainingSet)))  # 随机构建测试集，获取随机数作为index
+        testSet.append(trainingSet[randIndex])  # 把index对应的邮件index添加到测试集中
+        del (trainingSet[randIndex])  # 并且把该index从待挑选名单中删除
+
+    trainMat = []
+    trainClasses = []
+    for docIndex in trainingSet:
+        # 对于每一个训练集里的训练单位进行词向量的构建
+        trainMat.append(setOfWords2Vec(vocabList, docList[docIndex]))
+        trainClasses.append(classList[docIndex])  # 安上对应标签！
+    # 针对训练集进行训练
+    #
+    # print(trainMat)
+    # print(trainClasses)
+
+    p0V, p1V, pSpam = trainNB0(np.array(trainMat), np.array(trainClasses))
+    # print(p0V)
+
+    errorCount = 0
+
+    for docIndex in testSet:
+        # 提取训练名单上对应的邮件信息，查看滴docIndex条元素里对应的单词是否在vocablist词汇表中出现，出现则+1，返回信息向量wordVector
+        # print("train")
+        # print(docList[docIndex])
+        wordVector = setOfWords2Vec(vocabList, docList[docIndex])
+        # print(wordVector)
+
+        if classifyNB(np.array(wordVector), p0V, p1V, pSpam) != classList[docIndex]:
+            errorCount += 1
+            # print(main_email[docIndex])
+            # print(classifyNB(np.array(wordVector), p0V, p1V, pSpam))
+            # print(classList[docIndex])
+
+    # print('the error rate is :', float(errorCount) / len(testSet))
+    error_rate=float(errorCount) / len(testSet)
+    return p0V, p1V, pSpam,error_rate
+
+def find_the_data():
+    p0Num = np.ones(10)
+    p1Num = np.ones(10)
+    PA = 0.0
+    err=1
+    for i in range(50):
+        a,b,c,d=findthebest_Data_test()
+        if d<err:
+            err = d
+            p0Num=a
+            p1Num=b
+            PA=c
+
+
+    return p0Num,p1Num,PA
+
+
+
+def final_test():
+    p0,p1,pA =find_the_data()
+
+
+
+    docList = []
+    classList = []
+    fullText = []
+    main_email = []
+    for i in range(1, 26):
+        # （*1）
+        wordList = textParse(open('email/spam/%d.txt' % i).read())
+        main_e = open('email/spam/%d.txt' % i).read()
+        main_email.append(main_e)
+        docList.append(wordList)
+        fullText.extend(wordList)
+        classList.append(1)
+
+        wordList = textParse(open('email/ham/%d.txt' % i).read())
+        docList.append(wordList)
+        main_e = open('email/spam/%d.txt' % i).read()
+        main_email.append(main_e)
+        fullText.extend(wordList)
+        classList.append(0)
+
+    vocabList = createVocabList(docList)
+
+    errorCount = 0
+
+    for i in range(len(docList)):
+        # 提取训练名单上对应的邮件信息，查看滴docIndex条元素里对应的单词是否在vocablist词汇表中出现，出现则+1，返回信息向量wordVector
+        # print("train")
+        # print(docList[docIndex])
+        wordVector = setOfWords2Vec(vocabList, docList[i])
+        # print(wordVector)
+
+
+        if classifyNB(np.array(wordVector), p0, p1, pA) != classList[i]:
+            errorCount += 1
+            # print(main_email[i])
+            # print(classifyNB(np.array(wordVector), p0, p1, pA))
+            # print(classList[i])
+
+    print('the error rate is :', float(errorCount) / len(docList))
+
+
+
+final_test()
